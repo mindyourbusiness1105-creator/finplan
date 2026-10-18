@@ -1,0 +1,103 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FinPlan – Personal Finance Planner</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#14181f;--mut:#667085;--ac:#0f766e;--bd:#e4e7ec;--bad:#b42318;--ok:#067647}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1318;--card:#171c23;--tx:#e8ecf1;--mut:#98a2b3;--ac:#2dd4bf;--bd:#262d37;--bad:#f97066;--ok:#47cd89}}
+*{box-sizing:border-box}body{margin:0;font:15px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--tx)}
+main{max-width:1000px;margin:auto;padding:20px}h1{margin:0 0 4px}p.s{color:var(--mut);margin:0 0 18px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:14px}
+.g{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+label{display:block;font-size:13px;color:var(--mut);margin-bottom:3px}
+input,select{width:100%;padding:9px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit}
+input[type=range]{padding:0;accent-color:var(--ac)}
+button{background:var(--ac);color:#fff;border:0;padding:11px 20px;border-radius:8px;font:inherit;font-weight:600;cursor:pointer}
+.tabs{display:flex;gap:6px;margin-bottom:12px}.tabs button{background:var(--bg);color:var(--tx);border:1px solid var(--bd)}
+.tabs button.on{background:var(--ac);color:#fff}
+table{width:100%;border-collapse:collapse}td{padding:6px 0;border-bottom:1px solid var(--bd)}td:last-child{text-align:right}
+.bar{display:flex;height:22px;border-radius:6px;overflow:hidden;margin:8px 0}.bar div{font-size:11px;color:#fff;text-align:center;line-height:22px}
+.k{font-size:22px;font-weight:700}.m{color:var(--mut);font-size:13px}.bad{color:var(--bad)}.ok{color:var(--ok)}.sm{font-size:12px;color:var(--mut)}
+.cv{position:relative;height:260px}h3{margin:0 0 8px;font-size:16px}.tb{height:14px;border-radius:4px;background:var(--ac);margin:3px 0 8px}
+#wi{display:none;border-color:var(--ac)}
+</style></head><body><main>
+<h1>FinPlan</h1><p class="s">Tell us your situation. Get tax, budget, goal plan and a safe EMI limit under three scenarios.</p>
+<div class="card"><div class="g">
+<div><label>Monthly gross salary (₹)</label><input id="salary" type="number" value="90000"></div>
+<div><label>People dependent on you</label><input id="deps" type="number" min="0" value="0"></div>
+<div><label>Are you a homemaker?</label><select id="home"><option value="0">No</option><option value="1">Yes</option></select></div>
+<div><label>Existing EMIs / month (₹)</label><input id="emi" type="number" value="0"></div>
+<div><label>State</label><select id="state"></select></div>
+<div><label>Country</label><select id="country"><option>India</option></select></div>
+<div><label>Rent / home (₹/mo)</label><input id="n_rent" type="number" value="0"></div>
+<div><label>Medical (₹/mo)</label><input id="n_med" type="number" value="0"></div>
+<div><label>Other needs (₹/mo)</label><input id="n_oth" type="number" value="0"></div>
+<div><label>Goal</label><select id="gt"><option value="wealth">Build wealth</option><option value="study">Further study</option><option value="business">Start a business</option><option value="purchase">Buy something</option></select></div>
+<div><label>Goal amount in today's ₹ (0 = just build wealth)</label><input id="ga" type="number" value="500000"></div>
+<div><label>Years to goal</label><input id="gy" type="number" min="1" max="40" value="5"></div>
+<div><label>Risk appetite</label><select id="risk"><option value="1">1 – Very low</option><option value="2">2 – Low</option><option value="3" selected>3 – Moderate</option><option value="4">4 – High</option><option value="5">5 – Very high</option></select></div>
+<div><label>80C investments (₹/yr, max 1.5L)</label><input id="d80c" type="number" value="0"></div>
+<div><label>NPS 80CCD(1B) (₹/yr, max 50k)</label><input id="nps" type="number" value="0"></div>
+<div><label>Health insurance 80D (₹/yr)</label><input id="d80d" type="number" value="0"></div>
+<div><label>HRA / home-loan interest / other (₹/yr)</label><input id="oth" type="number" value="0"></div>
+</div><br><button onclick="run(true)">Build my plan</button></div>
+
+<div class="card" id="wi"><h3>What-if: tweak and watch the plan move</h3><div class="g">
+<div><label>Cut lifestyle spend by <b id="vl">₹0</b>/mo</label><input id="wl" type="range" min="0" max="25000" step="500" value="0"></div>
+<div><label>Years to goal: <b id="vy"></b></label><input id="wy" type="range" min="1" max="30" value="5"></div>
+<div><label>Risk appetite: <b id="vr"></b>/5</label><input id="wr" type="range" min="1" max="5" value="3"></div>
+<div><label>Vs your first plan (Moderate)</label><div id="dl" class="k"></div></div></div></div>
+<div id="out"></div>
+<p class="sm">Educational tool, not tax or investment advice. Tax uses FY 2026-27 slabs for a salaried resident individual (surcharge ignored; PF and professional tax not deducted). Allocations are asset-class ranges from labelled assumptions. Consult a CA / SEBI-registered adviser before acting.</p>
+</main><script>
+const $=id=>document.getElementById(id),f=n=>"₹"+Math.round(n).toLocaleString("en-IN");
+let D,cur="moderate",base=null,ch=[],tm;
+fetch("/api/states").then(r=>r.json()).then(s=>$("state").innerHTML=s.map(x=>`<option>${x}</option>`).join(""));
+function body(){const needs={};[["Rent / home","n_rent"],["Medical","n_med"],["Other needs","n_oth"]].forEach(([k,id])=>{if(+$(id).value)needs[k]=+$(id).value});
+ return{salary:+$("salary").value,dependents:+$("deps").value,homemaker:$("home").value=="1",needs,goal_type:$("gt").value,goal_amount:+$("ga").value,
+ goal_years:Math.max(1,+$("gy").value),emi:+$("emi").value,state:$("state").value,country:$("country").value,risk:+$("risk").value,lifestyle_cut:+$("wl").value,
+ d80c:+$("d80c").value,nps:+$("nps").value,d80d:+$("d80d").value,other_ded:+$("oth").value}}
+async function run(fresh){
+ if(fresh){$("wl").value=0;$("wy").value=Math.min(30,+$("gy").value||5);$("wr").value=$("risk").value}
+ const b=body();if(!(b.salary>0)){alert("Enter a monthly salary above 0");return}
+ const r=await fetch("/api/plan",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(b)});D=await r.json();D.in=b;
+ if(fresh||!base)base=D.scenarios.moderate;$("wi").style.display="block";show();}
+function wi(){$("gy").value=$("wy").value;$("risk").value=$("wr").value;clearTimeout(tm);tm=setTimeout(()=>run(false),200);lab()}
+function lab(){$("vl").textContent=f($("wl").value);$("vy").textContent=$("wy").value;$("vr").textContent=$("wr").value}
+["wl","wy","wr"].forEach(id=>$(id).addEventListener("input",wi));
+function chart(id,cfg){const c=new Chart($(id),cfg);ch.push(c)}
+function show(){
+ ch.forEach(c=>c.destroy());ch=[];lab();Chart.defaults.color=getComputedStyle(document.body).color;
+ const s=D.scenarios[cur],a=D.allocation,e=D.emi_limit,t=D.tax,col={eq:"#0f766e",debt:"#2563eb",gold:"#d97706",fd:"#7c3aed"},nm={eq:"Equity / MF",debt:"Bonds / Debt",gold:"Gold",fd:"FD"};
+ const m=D.scenarios.moderate,dp=(m.goal_probability??0)-(base.goal_probability??0),ds=m.surplus-base.surplus;
+ $("dl").innerHTML=D.in.goal_amount?`<span class="${dp>=0?"ok":"bad"}">${dp>=0?"+":""}${dp} pts</span> <span class="m">goal chance · surplus ${ds>=0?"+":""}${f(ds)}</span>`:`<span class="${ds>=0?"ok":"bad"}">${ds>=0?"+":""}${f(ds)}</span> <span class="m">surplus</span>`;
+ const tabs=["pessimistic","moderate","optimistic"].map(x=>`<button class="${x==cur?"on":""}" onclick="cur='${x}';show()">${x[0].toUpperCase()+x.slice(1)}</button>`).join("");
+ const mx=Math.max(t.new,t.old,1),rows=Object.entries(s.budget).map(([k,v])=>`<tr><td>${k}</td><td>${f(v)}</td></tr>`).join("");
+ const tax=`<div class="card"><h3>Income tax (FY 2026-27)</h3><div class="g"><div>
+ <div class="m">New regime: <b>${f(t.new)}</b>/yr</div><div class="tb" style="width:${t.new/mx*100}%"></div>
+ <div class="m">Old regime (deductions ${f(t.old_deductions)}): <b>${f(t.old)}</b>/yr</div><div class="tb" style="width:${t.old/mx*100}%;background:#d97706"></div></div>
+ <div><div class="k ${"ok"}">${t.best==="new"?"New":"Old"} regime wins</div><div class="m">Saves ${f(t.saving)}/yr. Take-home used for planning: <b>${f(D.net_monthly)}</b>/month.</div>
+ ${t.tip>0?`<div class="m">Maxing 80C + NPS could cut old-regime tax by about ${f(t.tip)}/yr.</div>`:""}</div></div></div>`;
+ const goal=D.in.goal_amount?`<div class="card"><h3>Goal plan <span class="m">(inflation ${(s.inflation*100).toFixed(1)}%, portfolio return ${s.expected_return}%)</span></h3>
+ <div class="g"><div><div class="m">Target after inflation</div><div class="k">${f(s.target_future)}</div></div>
+ <div><div class="m">Monthly saving needed</div><div class="k">${f(s.required_sip)}</div></div>
+ <div><div class="m">You can save</div><div class="k ${s.monthly_saving<s.required_sip?"bad":""}">${f(s.monthly_saving)}</div></div>
+ <div><div class="m">Chance of hitting goal</div><div class="k">${s.goal_probability}%</div></div></div>
+ <div class="cv" style="margin-top:10px"><canvas id="fan"></canvas></div>
+ <p class="m">3,000 simulated market paths: median ${f(s.projected_median)}, bad-luck case (10th pct) ${f(s.projected_p10)}. Median in today's money: ${f(s.real_median)}.</p>
+ ${s.monthly_saving<s.required_sip?`<p class="bad">Saving capacity is below the requirement. Try the sliders above: extend years or cut lifestyle spend.</p>`:""}</div>`:"";
+ $("out").innerHTML=`${tax}<div class="tabs">${tabs}</div>
+ <div class="g"><div class="card"><h3>Monthly budget</h3><table>${rows}<tr><td>Existing EMIs</td><td>${f(D.in.emi)}</td></tr>
+ <tr><td><b>Surplus</b></td><td class="${s.deficit?"bad":""}"><b>${f(s.surplus)}</b></td></tr></table>
+ <p class="m">Emergency fund target (6 months): ${f(s.emergency_fund)}${s.deficit?" · <span class='bad'>Expenses exceed income here.</span>":""}</p></div>
+ <div class="card"><h3>Where your money goes</h3><div class="cv"><canvas id="pie"></canvas></div></div></div>${goal}
+ <div class="g"><div class="card"><h3>Safe EMI limit</h3><div class="k">${f(e.room)}<span class="m"> /month more</span></div>
+ <p class="m">Total EMIs should stay under ${e.cap_pct}% of take-home (${f(e.cap_total)}). ${e.stressed?"<span class='bad'>Your current EMIs already exceed this.</span>":"You're within the safe zone."}</p></div>
+ <div class="card"><h3>Suggested asset mix <span class="m">(risk ${D.in.risk}/5, ${D.in.goal_years} yrs)</span></h3>
+ <div class="bar">${Object.keys(a).map(k=>`<div style="width:${a[k]}%;background:${col[k]}">${a[k]?a[k]+"%":""}</div>`).join("")}</div>
+ <div class="sm">${Object.keys(a).map(k=>`<span style="color:${col[k]}">■</span> ${nm[k]} ${a[k]}%`).join(" &nbsp; ")}</div></div></div>`;
+ const lbl=Object.keys(s.budget).concat(["EMIs","Savings"]),dat=Object.values(s.budget).concat([D.in.emi,s.monthly_saving]);
+ chart("pie",{type:"doughnut",data:{labels:lbl,datasets:[{data:dat,borderWidth:0,backgroundColor:["#0f766e","#2563eb","#d97706","#7c3aed","#db2777","#64748b","#0891b2","#ca8a04","#16a34a"]}]},options:{maintainAspectRatio:false,plugins:{legend:{position:"right"},tooltip:{callbacks:{label:c=>c.label+": "+f(c.parsed)}}}}});
+ if(D.in.goal_amount){const yrs=s.bands.p50.map((_,i)=>"Yr "+(i+1)),ln=(l,d,c,dash)=>({label:l,data:d,borderColor:c,backgroundColor:c,borderDash:dash,pointRadius:0,tension:.3});
+ chart("fan",{type:"line",data:{labels:yrs,datasets:[ln("Good luck (90th)",s.bands.p90,"#16a34a"),ln("Median",s.bands.p50,"#0f766e"),ln("Bad luck (10th)",s.bands.p10,"#b42318"),ln("Goal (inflated)",s.goal_curve,"#d97706",[6,4])]},
+ options:{maintainAspectRatio:false,interaction:{mode:"index",intersect:false},scales:{y:{ticks:{callback:v=>"₹"+(v>=1e7?(v/1e7).toFixed(1)+"Cr":v>=1e5?(v/1e5).toFixed(1)+"L":v)}}},plugins:{tooltip:{callbacks:{label:c=>c.dataset.label+": "+f(c.parsed.y)}}}}})}}
+</script></body></html>
